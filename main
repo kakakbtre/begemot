@@ -1,0 +1,362 @@
+import models.*;
+import factories.GraphFactory;
+import algorithms.GraphTraversal;
+import algorithms.ShortestPath;
+import utils.GraphJSONHandler;
+
+import java.io.IOException;
+import java.util.*;
+
+public class Main {
+    private static Graph currentGraph;
+    private static Scanner scanner = new Scanner(System.in);
+    
+    public static void main(String[] args) {
+        System.out.println("=== Graph Navigator ===");
+        System.out.println("Добро пожаловать в консольное приложение для работы с графами!\n");
+        
+        boolean running = true;
+        while (running) {
+            printMainMenu();
+            String choice = scanner.nextLine().trim();
+            
+            switch (choice) {
+                case "1":
+                    createNewGraph();
+                    break;
+                case "2":
+                    if (checkGraphExists()) addNode();
+                    break;
+                case "3":
+                    if (checkGraphExists()) removeNode();
+                    break;
+                case "4":
+                    if (checkGraphExists()) addEdge();
+                    break;
+                case "5":
+                    if (checkGraphExists()) removeEdge();
+                    break;
+                case "6":
+                    if (checkGraphExists()) displayGraph();
+                    break;
+                case "7":
+                    if (checkGraphExists()) runBFS();
+                    break;
+                case "8":
+                    if (checkGraphExists()) runDFS();
+                    break;
+                case "9":
+                    if (checkGraphExists()) findShortestPath();
+                    break;
+                case "10":
+                    saveGraph();
+                    break;
+                case "11":
+                    loadGraph();
+                    break;
+                case "0":
+                    System.out.println("До свидания!");
+                    running = false;
+                    break;
+                default:
+                    System.out.println("Неверный выбор. Пожалуйста, попробуйте снова.");
+            }
+            System.out.println();
+        }
+        scanner.close();
+    }
+    
+    private static void printMainMenu() {
+        System.out.println("=== Главное меню ===");
+        System.out.println("1. Создать новый граф");
+        System.out.println("2. Добавить вершину");
+        System.out.println("3. Удалить вершину");
+        System.out.println("4. Добавить ребро");
+        System.out.println("5. Удалить ребро");
+        System.out.println("6. Показать граф");
+        System.out.println("7. BFS (обход в ширину)");
+        System.out.println("8. DFS (обход в глубину)");
+        System.out.println("9. Найти кратчайший путь");
+        System.out.println("10. Сохранить граф в JSON");
+        System.out.println("11. Загрузить граф из JSON");
+        System.out.println("0. Выход");
+        System.out.print("Ваш выбор: ");
+    }
+    
+    private static void createNewGraph() {
+        System.out.println("\n=== Создание нового графа ===");
+        System.out.println("Выберите тип графа:");
+        System.out.println("1. Ориентированный (Directed)");
+        System.out.println("2. Неориентированный (Undirected)");
+        System.out.println("3. Взвешенный (Weighted)");
+        System.out.print("Ваш выбор: ");
+        
+        String typeChoice = scanner.nextLine().trim();
+        String graphType = "";
+        switch (typeChoice) {
+            case "1":
+                graphType = "DIRECTED";
+                break;
+            case "2":
+                graphType = "UNDIRECTED";
+                break;
+            case "3":
+                graphType = "WEIGHTED";
+                break;
+            default:
+                System.out.println("Неверный выбор. Создан ориентированный граф по умолчанию.");
+                graphType = "DIRECTED";
+        }
+        
+        try {
+            currentGraph = GraphFactory.createGraph(graphType);
+            System.out.println("Граф типа " + graphType + " успешно создан!");
+        } catch (IllegalArgumentException e) {
+            System.out.println("Ошибка: " + e.getMessage());
+        }
+    }
+    
+    private static void addNode() {
+        System.out.println("\n=== Добавление вершины ===");
+        System.out.print("Введите ID вершины: ");
+        String id = scanner.nextLine().trim();
+        
+        if (id.isEmpty()) {
+            System.out.println("ID не может быть пустым!");
+            return;
+        }
+        
+        if (currentGraph.hasNode(id)) {
+            System.out.println("Вершина с ID '" + id + "' уже существует!");
+            return;
+        }
+        
+        System.out.print("Введите название вершины (опционально, Enter для пропуска): ");
+        String name = scanner.nextLine().trim();
+        if (name.isEmpty()) {
+            name = id;
+        }
+        
+        GraphNode newNode = new GraphNode(id, name);
+        if (currentGraph.addNode(newNode)) {
+            System.out.println("Вершина '" + newNode + "' успешно добавлена!");
+        } else {
+            System.out.println("Не удалось добавить вершину!");
+        }
+    }
+    
+    private static void removeNode() {
+        System.out.println("\n=== Удаление вершины ===");
+        System.out.print("Введите ID вершины для удаления: ");
+        String id = scanner.nextLine().trim();
+        
+        if (currentGraph.removeNode(id)) {
+            System.out.println("Вершина '" + id + "' и все связанные с ней рёбра удалены!");
+        } else {
+            System.out.println("Вершина с ID '" + id + "' не найдена!");
+        }
+    }
+    
+    private static void addEdge() {
+        System.out.println("\n=== Добавление ребра ===");
+        System.out.print("Введите ID начальной вершины: ");
+        String fromId = scanner.nextLine().trim();
+        System.out.print("Введите ID конечной вершины: ");
+        String toId = scanner.nextLine().trim();
+        
+        if (!currentGraph.hasNode(fromId)) {
+            System.out.println("Начальная вершина '" + fromId + "' не найдена!");
+            return;
+        }
+        if (!currentGraph.hasNode(toId)) {
+            System.out.println("Конечная вершина '" + toId + "' не найдена!");
+            return;
+        }
+        
+        double weight = 1.0;
+        if (currentGraph.getClass().getSimpleName().equals("WeightedGraph") || 
+            currentGraph.getClass().getSimpleName().equals("Weighted")) {
+            System.out.print("Введите вес ребра (положительное число): ");
+            try {
+                weight = Double.parseDouble(scanner.nextLine().trim());
+                if (weight <= 0) {
+                    System.out.println("Вес должен быть положительным! Использован вес по умолчанию 1.0");
+                    weight = 1.0;
+                }
+            } catch (NumberFormatException e) {
+                System.out.println("Неверный формат числа! Использован вес по умолчанию 1.0");
+                weight = 1.0;
+            }
+        }
+        
+        try {
+            if (currentGraph.addEdge(fromId, toId, weight)) {
+                System.out.println("Ребро успешно добавлено!");
+            } else {
+                System.out.println("Не удалось добавить ребро!");
+            }
+        } catch (IllegalArgumentException e) {
+            System.out.println("Ошибка: " + e.getMessage());
+        }
+    }
+    
+    private static void removeEdge() {
+        System.out.println("\n=== Удаление ребра ===");
+        System.out.print("Введите ID начальной вершины: ");
+        String fromId = scanner.nextLine().trim();
+        System.out.print("Введите ID конечной вершины: ");
+        String toId = scanner.nextLine().trim();
+        
+        if (currentGraph.removeEdge(fromId, toId)) {
+            System.out.println("Ребро успешно удалено!");
+        } else {
+            System.out.println("Ребро не найдено!");
+        }
+    }
+    
+    private static void displayGraph() {
+        System.out.println("\n=== Текущий граф ===");
+        System.out.println(currentGraph);
+    }
+    
+    private static void runBFS() {
+        System.out.println("\n=== BFS (Обход в ширину) ===");
+        System.out.print("Введите ID начальной вершины: ");
+        String startId = scanner.nextLine().trim();
+        
+        try {
+            List<GraphNode> traversal = GraphTraversal.bfs(currentGraph, startId);
+            System.out.println("BFS обход: " + formatTraversal(traversal));
+        } catch (IllegalArgumentException e) {
+            System.out.println("Ошибка: " + e.getMessage());
+        }
+    }
+    
+    private static void runDFS() {
+        System.out.println("\n=== DFS (Обход в глубину) ===");
+        System.out.print("Введите ID начальной вершины: ");
+        String startId = scanner.nextLine().trim();
+        
+        try {
+            List<GraphNode> traversal = GraphTraversal.dfs(currentGraph, startId);
+            System.out.println("DFS обход: " + formatTraversal(traversal));
+        } catch (IllegalArgumentException e) {
+            System.out.println("Ошибка: " + e.getMessage());
+        }
+    }
+    
+    private static void findShortestPath() {
+        System.out.println("\n=== Поиск кратчайшего пути ===");
+        System.out.print("Введите ID начальной вершины: ");
+        String startId = scanner.nextLine().trim();
+        System.out.print("Введите ID конечной вершины: ");
+        String endId = scanner.nextLine().trim();
+        
+        try {
+            List<GraphNode> path;
+            
+            // Выбираем алгоритм в зависимости от типа графа
+            if (currentGraph.getClass().getSimpleName().equals("WeightedGraph") ||
+                hasWeights()) {
+                System.out.println("Используем алгоритм Дейкстры (взвешенный граф)");
+                path = ShortestPath.shortestPathDijkstra(currentGraph, startId, endId);
+            } else {
+                System.out.println("Используем BFS (невзвешенный граф)");
+                path = ShortestPath.shortestPathBFS(currentGraph, startId, endId);
+            }
+            
+            if (path.isEmpty()) {
+                System.out.println("Путь не найден!");
+            } else {
+                System.out.println("Кратчайший путь: " + formatTraversal(path));
+                System.out.println("Длина пути: " + (path.size() - 1) + " рёбер");
+                
+                // Если граф взвешенный, показываем общий вес
+                if (hasWeights() && path.size() > 1) {
+                    double totalWeight = 0;
+                    for (int i = 0; i < path.size() - 1; i++) {
+                        Double weight = currentGraph.getEdgeWeight(path.get(i).getId(), path.get(i + 1).getId());
+                        if (weight != null) {
+                            totalWeight += weight;
+                        }
+                    }
+                    System.out.println("Общий вес пути: " + totalWeight);
+                }
+            }
+        } catch (IllegalArgumentException e) {
+            System.out.println("Ошибка: " + e.getMessage());
+        }
+    }
+    
+    private static void saveGraph() {
+        if (currentGraph == null) {
+            System.out.println("Нет графа для сохранения!");
+            return;
+        }
+        
+        System.out.println("\n=== Сохранение графа ===");
+        System.out.print("Введите имя файла (без расширения): ");
+        String filename = scanner.nextLine().trim();
+        if (filename.isEmpty()) {
+            filename = "graph";
+        }
+        
+        String filePath = "graphs/saved_graphs/" + filename + ".json";
+        try {
+            GraphJSONHandler.saveGraph(currentGraph, filePath);
+            System.out.println("Граф успешно сохранён в файл: " + filePath);
+        } catch (IOException e) {
+            System.out.println("Ошибка при сохранении графа: " + e.getMessage());
+        }
+    }
+    
+    private static void loadGraph() {
+        System.out.println("\n=== Загрузка графа ===");
+        System.out.print("Введите имя файла для загрузки (без расширения): ");
+        String filename = scanner.nextLine().trim();
+        if (filename.isEmpty()) {
+            System.out.println("Имя файла не может быть пустым!");
+            return;
+        }
+        
+        String filePath = "graphs/saved_graphs/" + filename + ".json";
+        try {
+            currentGraph = GraphJSONHandler.loadGraph(filePath);
+            System.out.println("Граф успешно загружен из файла: " + filePath);
+            displayGraph();
+        } catch (IOException e) {
+            System.out.println("Ошибка при загрузке графа: файл не найден или не может быть прочитан");
+        } catch (com.google.gson.JsonParseException e) {
+            System.out.println("Ошибка: неверный формат JSON файла");
+        }
+    }
+    
+    private static boolean checkGraphExists() {
+        if (currentGraph == null) {
+            System.out.println("Сначала создайте или загрузите граф (опция 1 или 11)!");
+            return false;
+        }
+        return true;
+    }
+    
+    private static boolean hasWeights() {
+        // Проверяем, есть ли в графе рёбра с весом не равным 1.0
+        for (GraphNode node : currentGraph.getAllNodes()) {
+            for (Double weight : currentGraph.getNeighbors(node.getId()).values()) {
+                if (weight != 1.0) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+    
+    private static String formatTraversal(List<GraphNode> traversal) {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < traversal.size(); i++) {
+            if (i > 0) sb.append(" -> ");
+            sb.append(traversal.get(i).getName());
+        }
+        return sb.toString();
+    }
+}
